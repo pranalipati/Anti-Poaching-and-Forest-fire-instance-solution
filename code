@@ -1,0 +1,188 @@
+#define BLYNK_TEMPLATE_ID "TMPL32rWgC200"
+#define BLYNK_TEMPLATE_NAME "antipoaching"
+#define BLYNK_AUTH_TOKEN "jNATHFre1rSslF9a9UKCcFrN3WMxpsqM"
+ 
+// Comment this out to disable prints and save space
+#define BLYNK_PRINT Serial
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+ String apiKey = "QPE40JZKJX7RL42N";   
+char auth[] = BLYNK_AUTH_TOKEN;
+
+char ssid[] = "Hello";
+char pass[] = "12345678";
+const char* server = "api.thingspeak.com";
+
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+BlynkTimer timer;
+#include <DHT.h> 
+ 
+#define DHTPIN 19         // What digital pin we're connected to
+
+// Uncomment whatever type you're using!
+#define DHTTYPE DHT11 
+
+DHT dht(DHTPIN, DHTTYPE);
+
+
+WiFiClient client;
+int sound=35;
+int buzzer=18;
+int pump=5; 
+int accel=33; 
+int smk=32; 
+
+ int val1;
+int  val2;
+ float h;
+ float t;
+int ff1;
+void sendDataTS(void)
+{
+     if (client.connect(server,80))   //   "184.106.153.149" or api.thingspeak.com
+                      {  
+                            
+                             String postStr = apiKey;
+                             postStr +="&field1=";
+                             postStr += String(t);
+                             postStr +="&field2=";
+                             postStr += String(h); 
+                             postStr +="&field3=";
+                             postStr += String(val1);  //sound
+                             postStr +="&field4=";
+                             postStr += String(ff1); //gyro
+                             postStr +="&field5=";
+                             postStr += String(val2); //smoke
+                                
+                             postStr += "\r\n\r\n";
+ 
+                             client.print("POST /update HTTP/1.1\n");
+                             client.print("Host: api.thingspeak.com\n");
+                             client.print("Connection: close\n");
+                             client.print("X-THINGSPEAKAPIKEY: "+apiKey+"\n");
+                             client.print("Content-Type: application/x-www-form-urlencoded\n");
+                             client.print("Content-Length: ");
+                             client.print(postStr.length());
+                             client.print("\n\n");
+                             client.print(postStr);
+                           
+                               delay(1000);
+                        }
+          client.stop();
+  }
+
+ 
+void temp()
+{
+ h = dht.readHumidity();
+ t = dht.readTemperature();
+ Serial.println(h);
+  Serial.println(t);
+   String state = "T "+String((float)t)+"C H "+String((float)h) +"%";
+    Serial.println(state); 
+    lcd.setCursor(0,0);
+    lcd.print(state);
+    Blynk.virtualWrite(V2,state);
+ 
+  }
+ void soudnsensor()
+ {
+ val1=analogRead(sound);
+ Serial.println(val1);
+    lcd.setCursor(8,1);
+    lcd.print("Snd:");
+    lcd.print(val1);
+ if(val1>3300)
+ {
+    Blynk.virtualWrite(V6,"Sound detected");
+  }     
+  else
+  {
+        Blynk.virtualWrite(V6,"No Sound detected");
+    }
+
+  }
+ 
+void smokess()
+{
+   val2=analogRead(smk);
+    lcd.setCursor(0,1);
+    lcd.print("SMK:");
+    lcd.print(val2);
+ if(val2>1600)
+   {
+    Blynk.virtualWrite(V3,"Smoke detected");
+    digitalWrite(pump,HIGH); 
+   } 
+   else
+   {
+       Blynk.virtualWrite(V3,"NO Smoke detected");
+    digitalWrite(pump,LOW); 
+    }    
+  } 
+void gyro()
+{
+     ff1=analogRead(accel);
+ 
+     Serial.println(val2);
+      Serial.println("TREE STATUS");
+     Serial.println(ff1);
+   
+    delay(500);
+    //Blynk.virtualWrite(V9,ff1);
+     if(ff1>2150 || ff1<1700)
+     {
+      Blynk.virtualWrite(V8,"Tree fallen"); 
+          digitalWrite(buzzer,HIGH);
+     }
+  
+     else
+     {
+      Blynk.virtualWrite(V8,"Normal");
+      digitalWrite(buzzer,LOW);
+ 
+     }
+     
+  }
+void setup() 
+{
+Serial.begin(115200);
+  delay(10);
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, pass);
+ 
+  int wifi_ctr = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+  delay(500);
+  Serial.print(".");
+  }
+  Serial.println("WiFi connected");
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+    lcd.init();
+  lcd.backlight();
+  dht.begin();
+  pinMode(sound,INPUT);
+  
+  pinMode(smk,INPUT);
+  pinMode(accel,INPUT);
+  pinMode(pump,OUTPUT); 
+    pinMode(buzzer,OUTPUT);  
+  timer.setInterval(10000L, sendDataTS);
+  timer.setInterval(1000L, temp);
+  timer.setInterval(1000L, soudnsensor); 
+  timer.setInterval(1000L, gyro); 
+    timer.setInterval(1000L, smokess); 
+ }
+
+void loop() 
+{
+
+  Blynk.run();
+timer.run();
+ }
